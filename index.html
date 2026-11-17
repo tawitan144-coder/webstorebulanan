@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Store & Inventaris Bulanan Mesin</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS (XLSX) untuk Ekspor Laporan Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- HTML5-QRCode untuk Scan Barcode & QR Code via Kamera HP -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        /* Kustomisasi Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Animasi Modal & Toast */
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up {
+            animation: slideUp 0.25s ease-out forwards;
+        }
+        #qr-reader video {
+            border-radius: 0.75rem;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2 rounded-xl shadow-inner">
+                    <i data-lucide="cpu" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base sm:text-lg leading-tight tracking-tight">Store Mesin & Alat</h1>
+                    <p class="text-xs text-slate-400">Inventaris & Laporan Bulanan</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="startQuickScan()" class="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-sm font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                    <i data-lucide="scan-barcode" class="w-4 h-4"></i>
+                    <span>Scan</span>
+                </button>
+                <button onclick="openInputModal()" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-sm font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                    <i data-lucide="camera" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Input Barang / Scan</span>
+                    <span class="sm:hidden">Input</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Konten Utama -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Filter Periode Bulanan & Tombol Ekspor Excel -->
+        <section class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="flex items-center gap-2 text-slate-700 font-semibold text-sm">
+                    <i data-lucide="calendar" class="w-4 h-4 text-blue-600"></i>
+                    <span>Periode Laporan:</span>
+                </div>
+                <div class="grid grid-cols-2 sm:flex items-center gap-2">
+                    <select id="filterBulan" onchange="renderDashboard()" class="bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block w-full sm:w-40 p-2.5 font-medium">
+                        <option value="01">Januari</option>
+                        <option value="02">Februari</option>
+                        <option value="03">Maret</option>
+                        <option value="04">April</option>
+                        <option value="05">Mei</option>
+                        <option value="06">Juni</option>
+                        <option value="07">Juli</option>
+                        <option value="08">Agustus</option>
+                        <option value="09">September</option>
+                        <option value="10">Oktober</option>
+                        <option value="11">November</option>
+                        <option value="12">Desember</option>
+                        <option value="ALL">Semua Bulan</option>
+                    </select>
+                    <select id="filterTahun" onchange="renderDashboard()" class="bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block w-full sm:w-28 p-2.5 font-medium">
+                        <!-- Diisi otomatis via JS -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5">
+                <button onclick="resetDemoData()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-2 border border-slate-300 transition-all" title="Muat ulang data contoh mesin">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    <span>Reset Contoh</span>
+                </button>
+                <button onclick="exportToExcel()" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                    <span>Ekspor Laporan Excel (.xlsx)</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Ringkasan Statistik Bulanan (4 Kartu Metrik Unit) -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <!-- 1. Total Jenis Mesin -->
+            <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center gap-3.5">
+                <div class="bg-slate-100 text-slate-700 p-3 rounded-2xl shrink-0">
+                    <i data-lucide="layers" class="w-6 h-6"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[11px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">Total Jenis Mesin</p>
+                    <h2 id="statJenis" class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-0.5">0</h2>
+                    <p class="text-[11px] text-slate-400 mt-0.5 truncate">Item terdaftar</p>
+                </div>
+            </div>
+
+            <!-- 2. Total Unit Input (Masuk) -->
+            <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center gap-3.5">
+                <div class="bg-blue-50 text-blue-600 p-3 rounded-2xl shrink-0">
+                    <i data-lucide="arrow-down-circle" class="w-6 h-6"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[11px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">Total Input (Masuk)</p>
+                    <h2 id="statInput" class="text-xl sm:text-2xl font-extrabold text-blue-600 mt-0.5">+0</h2>
+                    <p class="text-[11px] text-slate-400 mt-0.5 truncate">Unit masuk periode ini</p>
+                </div>
+            </div>
+
+            <!-- 3. Total Unit Output (Keluar) -->
+            <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center gap-3.5">
+                <div class="bg-amber-50 text-amber-600 p-3 rounded-2xl shrink-0">
+                    <i data-lucide="arrow-up-circle" class="w-6 h-6"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[11px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">Total Output (Keluar)</p>
+                    <h2 id="statOutput" class="text-xl sm:text-2xl font-extrabold text-amber-600 mt-0.5">-0</h2>
+                    <p class="text-[11px] text-slate-400 mt-0.5 truncate">Unit keluar periode ini</p>
+                </div>
+            </div>
+
+            <!-- 4. Total Unit Tersedia Saat Ini -->
+            <div class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center gap-3.5">
+                <div class="bg-emerald-50 text-emerald-600 p-3 rounded-2xl shrink-0">
+                    <i data-lucide="package-check" class="w-6 h-6"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[11px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">Unit Tersedia</p>
+                    <h2 id="statTersedia" class="text-xl sm:text-2xl font-extrabold text-emerald-600 mt-0.5">0 Unit</h2>
+                    <p class="text-[11px] text-slate-400 mt-0.5 truncate">Sisa stok siap pakai</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pencarian & Daftar Barang/Mesin -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base">Daftar Stok Unit Mesin & Komponen</h3>
+                    <p id="subtitlePeriode" class="text-xs text-slate-500 mt-0.5">Menampilkan data bulan terpilih</p>
+                </div>
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-64">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="searchInput" oninput="renderDashboard()" placeholder="Cari nama, kode/SN, kategori..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <select id="filterKategori" onchange="renderDashboard()" class="bg-slate-50 border border-slate-300 text-slate-700 text-sm rounded-xl p-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="ALL">Semua Kategori</option>
+                        <option value="Mesin Produksi">Mesin Produksi</option>
+                        <option value="Mesin Bengkel / Las">Mesin Bengkel / Las</option>
+                        <option value="Alat Berat / Pompa">Alat Berat / Pompa</option>
+                        <option value="Sparepart & Komponen">Sparepart & Komponen</option>
+                        <option value="Alat Ukur & Elektrikal">Alat Ukur & Elektrikal</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tampilan Kartu Mobile (Layar HP < md) -->
+            <div id="mobileCardList" class="md:hidden divide-y divide-slate-100">
+                <!-- Kartu mobile dirender via JS -->
+            </div>
+
+            <!-- Tabel Desktop (Layar >= md) -->
+            <div class="hidden md:block overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <th class="py-3.5 px-4">Foto</th>
+                            <th class="py-3.5 px-4">Tanggal Update</th>
+                            <th class="py-3.5 px-4">Kode / SN</th>
+                            <th class="py-3.5 px-4">Nama Mesin & Kategori</th>
+                            <th class="py-3.5 px-4 text-center">Stok Awal</th>
+                            <th class="py-3.5 px-4 text-center text-blue-600">Input (+)</th>
+                            <th class="py-3.5 px-4 text-center text-amber-600">Output (-)</th>
+                            <th class="py-3.5 px-4 text-center">Unit Tersedia</th>
+                            <th class="py-3.5 px-4 text-center">Transaksi Cepat</th>
+                            <th class="py-3.5 px-4 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 text-sm">
+                        <!-- Baris data dirender lewat JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- State Kosong -->
+            <div id="emptyState" class="hidden py-12 px-4 text-center">
+                <div class="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+                    <i data-lucide="inbox" class="w-8 h-8"></i>
+                </div>
+                <h4 class="font-semibold text-slate-700">Belum ada data mesin pada periode ini</h4>
+                <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1">Gunakan tombol "Input Barang / Scan" untuk memotret mesin atau memindai barcode secara langsung.</p>
+                <button onclick="openInputModal()" class="mt-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl inline-flex items-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Tambah Data Sekarang</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-500">
+        Data tersimpan otomatis secara lokal di browser perangkat Anda • Siap ekspor ke Microsoft Excel (.xlsx)
+    </footer>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL INPUT / EDIT BARANG DENGAN KAMERA HP & SCANNER BARCODE/QR      -->
+    <!-- ===================================================================== -->
+    <div id="inputModal" class="fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slide-up max-h-[92vh] flex flex-col">
+            
+            <!-- Header Modal -->
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="scan-line" class="w-5 h-5 text-blue-400"></i>
+                    <h3 id="modalTitle" class="font-bold text-base">Input Mesin Baru (Kamera HP)</h3>
+                </div>
+                <button onclick="closeInputModal()" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Isi Modal (Scrollable) -->
+            <div class="p-5 overflow-y-auto space-y-5">
+                
+                <!-- Panel Kamera HP: Tab Foto Barang vs Scan Barcode/QR -->
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                            <i data-lucide="smartphone" class="w-4 h-4 text-blue-600"></i>
+                            Fitur Kamera HP
+                        </span>
+                        <div class="flex gap-1.5">
+                            <button type="button" onclick="triggerPhotoCapture()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm">
+                                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                                <span>Foto Barang</span>
+                            </button>
+                            <button type="button" id="btnToggleScanner" onclick="toggleBarcodeScanner()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm">
+                                <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
+                                <span id="textToggleScanner">Scan Barcode/QR</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input File Tersembunyi untuk Kamera HP Langsung -->
+                    <input type="file" id="cameraPhotoInput" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoSelected(event)">
+
+                    <!-- Area Live Barcode / QR Scanner -->
+                    <div id="scannerContainer" class="hidden space-y-2">
+                        <div id="qr-reader" class="w-full overflow-hidden rounded-xl border border-indigo-200 bg-black"></div>
+                        <p class="text-[11px] text-center text-slate-500">Arahkan kamera HP ke Barcode atau QR Code mesin untuk mengisi Kode/SN otomatis.</p>
+                    </div>
+
+                    <!-- Preview Foto Barang yang Diambil -->
+                    <div id="photoPreviewContainer" class="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200">
+                        <img id="photoPreviewImg" src="https://placehold.co/120x120/e2e8f0/64748b?text=Foto+Mesin" alt="Preview Mesin" class="w-16 h-16 rounded-lg object-cover border border-slate-200 shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <p id="photoStatusText" class="text-xs font-medium text-slate-700 truncate">Belum ada foto diambil</p>
+                            <p class="text-[11px] text-slate-400">Foto otomatis dikompres agar hemat memori & siap tampil di laporan.</p>
+                            <button type="button" id="btnRemovePhoto" onclick="removePhoto()" class="hidden mt-1 text-[11px] text-red-600 font-semibold hover:underline">Hapus Foto</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Data Barang -->
+                <form id="itemForm" onsubmit="saveItem(event)" class="space-y-4">
+                    <input type="hidden" id="inputId">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Tanggal Update -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Update *</label>
+                            <input type="date" id="inputTanggal" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <!-- Kode / SN -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Kode / Serial Number *</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="inputKode" required placeholder="Scan atau ketik kode" class="flex-1 min-w-0 bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-mono focus:ring-blue-500 focus:border-blue-500">
+                                <button type="button" onclick="toggleBarcodeScanner()" class="shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 rounded-xl" title="Scan Barcode/QR">
+                                    <i data-lucide="scan-barcode" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nama Barang / Mesin -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Barang / Mesin *</label>
+                        <input type="text" id="inputNama" required placeholder="Contoh: Mesin Bubut CNC Mini / Kompresor 2HP" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Kategori -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori Mesin *</label>
+                        <select id="inputKategori" required class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="Mesin Produksi">Mesin Produksi</option>
+                            <option value="Mesin Bengkel / Las">Mesin Bengkel / Las</option>
+                            <option value="Alat Berat / Pompa">Alat Berat / Pompa</option>
+                            <option value="Sparepart & Komponen">Sparepart & Komponen</option>
+                            <option value="Alat Ukur & Elektrikal">Alat Ukur & Elektrikal</option>
+                        </select>
+                    </div>
+
+                    <!-- Stok -->
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Stok Awal</label>
+                            <input type="number" id="inputStokAwal" min="0" value="0" oninput="updateTersediaPreview()" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-center focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-blue-700 mb-1">Input (+)</label>
+                            <input type="number" id="inputMasuk" min="0" value="0" oninput="updateTersediaPreview()" class="w-full bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-sm text-center focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-amber-700 mb-1">Output (-)</label>
+                            <input type="number" id="inputKeluar" min="0" value="0" oninput="updateTersediaPreview()" class="w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-center focus:ring-amber-500 focus:border-amber-500">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5">
+                        <span class="text-xs font-semibold text-emerald-800">Unit Tersedia</span>
+                        <span id="previewTersedia" class="text-base font-extrabold text-emerald-700">0 Unit</span>
+                    </div>
+
+                    <!-- Catatan -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan / Keterangan</label>
+                        <textarea id="inputCatatan" rows="2" placeholder="Lokasi rak, kondisi mesin, dll." class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+
+                    <div class="flex gap-2.5 pt-1">
+                        <button type="button" onclick="closeInputModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold py-3 rounded-xl border border-slate-300">Batal</button>
+                        <button type="submit" class="flex-[2] bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-sm font-semibold py-3 rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            <span id="btnSaveText">Simpan Data</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL TRANSAKSI CEPAT HASIL SCAN (Barang Sudah Terdaftar)            -->
+    <!-- ===================================================================== -->
+    <div id="quickModal" class="fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slide-up">
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="package-search" class="w-5 h-5 text-blue-400"></i>
+                    <h3 class="font-bold text-base">Transaksi Barang</h3>
+                </div>
+                <button onclick="closeQuickModal()" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="flex items-center gap-3">
+                    <img id="quickFoto" src="" alt="" class="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0">
+                    <div class="min-w-0 flex-1">
+                        <div id="quickNama" class="font-bold text-slate-800 truncate"></div>
+                        <div class="text-xs text-slate-500 truncate"><span id="quickKategori"></span> • <span id="quickKode" class="font-mono"></span></div>
+                        <div class="text-xs mt-1">Stok tersedia: <b id="quickStok" class="text-emerald-700"></b></div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Unit</label>
+                    <div class="flex items-stretch gap-2">
+                        <button type="button" onclick="stepQuickQty(-1)" class="w-12 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-lg font-bold text-slate-700">−</button>
+                        <input type="number" id="quickQty" min="1" value="1" inputmode="numeric" class="flex-1 min-w-0 bg-white border border-slate-300 rounded-xl px-3 py-3 text-xl font-extrabold text-center focus:ring-blue-500 focus:border-blue-500">
+                        <button type="button" onclick="stepQuickQty(1)" class="w-12 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-lg font-bold text-slate-700">+</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button type="button" onclick="saveQuickTransaction('in')" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                        <i data-lucide="arrow-down-circle" class="w-5 h-5"></i>
+                        <span>Masuk (+)</span>
+                    </button>
+                    <button type="button" onclick="saveQuickTransaction('out')" class="bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                        <i data-lucide="arrow-up-circle" class="w-5 h-5"></i>
+                        <span>Keluar (−)</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between text-xs pt-1">
+                    <button type="button" onclick="editFromQuick()" class="text-slate-600 font-semibold hover:underline flex items-center gap-1">
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit Detail
+                    </button>
+                    <button type="button" onclick="scanAgainFromQuick()" class="text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+                        <i data-lucide="scan-barcode" class="w-3.5 h-3.5"></i> Scan Barang Lain
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifikasi -->
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+        <div id="toastInner" class="animate-slide-up bg-slate-900 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 max-w-[90vw]">
+            <span id="toastText"></span>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'storeMesinData_v1';
+        const PLACEHOLDER_IMG = 'https://placehold.co/120x120/e2e8f0/64748b?text=Foto+Mesin';
+        let items = [];
+        let currentPhoto = '';
+        let html5QrCode = null;
+        let scannerRunning = false;
+
+        // ---------- Utilitas ----------
+        function todayStr() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        function uid() {
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        }
+        function esc(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function toInt(v) {
+            const n = parseInt(v, 10);
+            return isNaN(n) || n < 0 ? 0 : n;
+        }
+        function tersedia(it) {
+            return toInt(it.stokAwal) + toInt(it.input) - toInt(it.output);
+        }
+        function formatTanggal(s) {
+            if (!s) return '-';
+            const [y, m, d] = s.split('-');
+            const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            return `${d} ${bulan[parseInt(m, 10) - 1]} ${y}`;
+        }
+        function refreshIcons() {
+            if (window.lucide) lucide.createIcons();
+        }
+        let toastTimer = null;
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            const inner = document.getElementById('toastInner');
+            inner.className = 'animate-slide-up text-white text-sm font-medium px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 max-w-[90vw] ' +
+                (type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-900');
+            document.getElementById('toastText').textContent = msg;
+            toast.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.add('hidden'), 2800);
+        }
+
+        // ---------- Penyimpanan Lokal ----------
+        function loadData() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                items = raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                items = null;
+            }
+            if (!Array.isArray(items)) {
+                items = getDemoData();
+                saveData();
+            }
+        }
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+                return true;
+            } catch (e) {
+                showToast('Penyimpanan penuh. Hapus beberapa foto atau data lama.', 'error');
+                return false;
+            }
+        }
+        function getDemoData() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            return [
+                { id: uid(), tanggal: `${y}-${m}-02`, kode: 'MSN-CNC-001', nama: 'Mesin Bubut CNC Mini', kategori: 'Mesin Produksi', stokAwal: 3, input: 2, output: 1, foto: '', catatan: 'Rak A1' },
+                { id: uid(), tanggal: `${y}-${m}-05`, kode: 'LAS-INV-120', nama: 'Mesin Las Inverter 120A', kategori: 'Mesin Bengkel / Las', stokAwal: 5, input: 4, output: 3, foto: '', catatan: '' },
+                { id: uid(), tanggal: `${y}-${m}-08`, kode: 'PMP-AIR-2HP', nama: 'Pompa Air Sentrifugal 2HP', kategori: 'Alat Berat / Pompa', stokAwal: 2, input: 1, output: 0, foto: '', catatan: 'Gudang B' },
+                { id: uid(), tanggal: `${y}-${m}-10`, kode: 'SPR-BRG-6204', nama: 'Bearing 6204 ZZ', kategori: 'Sparepart & Komponen', stokAwal: 40, input: 20, output: 15, foto: '', catatan: '' },
+                { id: uid(), tanggal: `${y}-${m}-12`, kode: 'UKR-MTR-DGT', nama: 'Multimeter Digital', kategori: 'Alat Ukur & Elektrikal', stokAwal: 6, input: 0, output: 2, foto: '', catatan: '' }
+            ];
+        }
+        function resetDemoData() {
+            if (!confirm('Semua data saat ini akan diganti dengan data contoh. Lanjutkan?')) return;
+            items = getDemoData();
+            saveData();
+            setPeriodeToToday();
+            renderDashboard();
+            showToast('Data contoh dimuat ulang', 'success');
+        }
+
+        // ---------- Filter Periode ----------
+        function populateTahun() {
+            const sel = document.getElementById('filterTahun');
+            const current = new Date().getFullYear();
+            const years = new Set([current]);
+            items.forEach(it => { if (it.tanggal) years.add(parseInt(it.tanggal.slice(0, 4), 10)); });
+            for (let y = current - 3; y <= current + 1; y++) years.add(y);
+            const prev = sel.value;
+            sel.innerHTML = [...years].sort((a, b) => b - a).map(y => `<option value="${y}">${y}</option>`).join('');
+            sel.value = prev && [...years].includes(parseInt(prev, 10)) ? prev : String(current);
+        }
+        function setPeriodeToToday() {
+            const now = new Date();
+            populateTahun();
+            document.getElementById('filterBulan').value = String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('filterTahun').value = String(now.getFullYear());
+        }
+        function getFilteredItems() {
+            const bulan = document.getElementById('filterBulan').value;
+            const tahun = document.getElementById('filterTahun').value;
+            const q = document.getElementById('searchInput').value.trim().toLowerCase();
+            const kat = document.getElementById('filterKategori').value;
+            return items.filter(it => {
+                const [y, m] = (it.tanggal || '').split('-');
+                if (y !== tahun) return false;
+                if (bulan !== 'ALL' && m !== bulan) return false;
+                if (kat !== 'ALL' && it.kategori !== kat) return false;
+                if (q && !`${it.nama} ${it.kode} ${it.kategori} ${it.catatan || ''}`.toLowerCase().includes(q)) return false;
+                return true;
+            }).sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+        }
+
+        // ---------- Render Dashboard ----------
+        function renderDashboard() {
+            const list = getFilteredItems();
+            const bulanSel = document.getElementById('filterBulan');
+            const namaBulan = bulanSel.options[bulanSel.selectedIndex].text;
+            const tahun = document.getElementById('filterTahun').value;
+            document.getElementById('subtitlePeriode').textContent =
+                bulanSel.value === 'ALL' ? `Menampilkan semua bulan tahun ${tahun}` : `Menampilkan data ${namaBulan} ${tahun}`;
+
+            let totalIn = 0, totalOut = 0, totalAvail = 0;
+            list.forEach(it => { totalIn += toInt(it.input); totalOut += toInt(it.output); totalAvail += tersedia(it); });
+            document.getElementById('statJenis').textContent = list.length;
+            document.getElementById('statInput').textContent = '+' + totalIn;
+            document.getElementById('statOutput').textContent = '-' + totalOut;
+            document.getElementById('statTersedia').textContent = totalAvail + ' Unit';
+
+            const tbody = document.getElementById('tableBody');
+            const mobile = document.getElementById('mobileCardList');
+            const empty = document.getElementById('emptyState');
+
+            if (list.length === 0) {
+                tbody.innerHTML = '';
+                mobile.innerHTML = '';
+                empty.classList.remove('hidden');
+                refreshIcons();
+                return;
+            }
+            empty.classList.add('hidden');
+
+            tbody.innerHTML = list.map(it => {
+                const avail = tersedia(it);
+                const availCls = avail <= 0 ? 'bg-red-50 text-red-700' : avail <= 2 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700';
+                return `
+                <tr class="hover:bg-slate-50/60">
+                    <td class="py-3 px-4"><img src="${esc(it.foto || PLACEHOLDER_IMG)}" alt="" class="w-12 h-12 rounded-lg object-cover border border-slate-200"></td>
+                    <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${formatTanggal(it.tanggal)}</td>
+                    <td class="py-3 px-4 font-mono text-xs text-slate-700">${esc(it.kode)}</td>
+                    <td class="py-3 px-4">
+                        <div class="font-semibold text-slate-800">${esc(it.nama)}</div>
+                        <div class="text-xs text-slate-500">${esc(it.kategori)}</div>
+                    </td>
+                    <td class="py-3 px-4 text-center font-medium">${toInt(it.stokAwal)}</td>
+                    <td class="py-3 px-4 text-center font-semibold text-blue-600">+${toInt(it.input)}</td>
+                    <td class="py-3 px-4 text-center font-semibold text-amber-600">-${toInt(it.output)}</td>
+                    <td class="py-3 px-4 text-center"><span class="px-2.5 py-1 rounded-lg text-xs font-bold ${availCls}">${avail} Unit</span></td>
+                    <td class="py-3 px-4">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button onclick="quickTransaction('${it.id}', 'in')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold px-2.5 py-1.5 rounded-lg" title="Tambah 1 unit masuk">+1</button>
+                            <button onclick="quickTransaction('${it.id}', 'out')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold px-2.5 py-1.5 rounded-lg" title="Tambah 1 unit keluar">-1</button>
+                        </div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="openInputModal('${it.id}')" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                            <button onclick="deleteItem('${it.id}')" class="p-2 rounded-lg hover:bg-red-50 text-red-600" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            mobile.innerHTML = list.map(it => {
+                const avail = tersedia(it);
+                const availCls = avail <= 0 ? 'bg-red-50 text-red-700' : avail <= 2 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700';
+                return `
+                <div class="p-4 flex gap-3">
+                    <img src="${esc(it.foto || PLACEHOLDER_IMG)}" alt="" class="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-slate-800 text-sm truncate">${esc(it.nama)}</div>
+                                <div class="text-[11px] text-slate-500 truncate">${esc(it.kategori)} • <span class="font-mono">${esc(it.kode)}</span></div>
+                                <div class="text-[11px] text-slate-400">${formatTanggal(it.tanggal)}</div>
+                            </div>
+                            <span class="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold ${availCls}">${avail} Unit</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-[11px] mt-1.5">
+                            <span class="text-slate-600">Awal: <b>${toInt(it.stokAwal)}</b></span>
+                            <span class="text-blue-600">Masuk: <b>+${toInt(it.input)}</b></span>
+                            <span class="text-amber-600">Keluar: <b>-${toInt(it.output)}</b></span>
+                        </div>
+                        <div class="flex items-center gap-1.5 mt-2">
+                            <button onclick="quickTransaction('${it.id}', 'in')" class="bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold px-3 py-1.5 rounded-lg">+1</button>
+                            <button onclick="quickTransaction('${it.id}', 'out')" class="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg">-1</button>
+                            <div class="flex-1"></div>
+                            <button onclick="openInputModal('${it.id}')" class="p-2 rounded-lg bg-slate-100 text-slate-600"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                            <button onclick="deleteItem('${it.id}')" class="p-2 rounded-lg bg-red-50 text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            refreshIcons();
+        }
+
+        // ---------- Transaksi Cepat & Hapus ----------
+        function quickTransaction(id, type) {
+            const it = items.find(x => x.id === id);
+            if (!it) return;
+            if (type === 'in') {
+                it.input = toInt(it.input) + 1;
+            } else {
+                if (tersedia(it) <= 0) { showToast('Stok habis, tidak bisa mengeluarkan unit', 'error'); return; }
+                it.output = toInt(it.output) + 1;
+            }
+            saveData();
+            renderDashboard();
+            showToast(type === 'in' ? `+1 unit masuk: ${it.nama}` : `-1 unit keluar: ${it.nama}`, 'success');
+        }
+        function deleteItem(id) {
+            const it = items.find(x => x.id === id);
+            if (!it || !confirm(`Hapus "${it.nama}"?`)) return;
+            items = items.filter(x => x.id !== id);
+            saveData();
+            renderDashboard();
+            showToast('Data dihapus', 'success');
+        }
+
+        // ---------- Modal Input / Edit ----------
+        function openInputModal(id) {
+            const form = document.getElementById('itemForm');
+            form.reset();
+            document.getElementById('inputId').value = '';
+            setPhoto('');
+            const it = typeof id === 'string' ? items.find(x => x.id === id) : null;
+            if (it) {
+                fillForm(it);
+            } else {
+                document.getElementById('modalTitle').textContent = 'Input Mesin Baru (Kamera HP)';
+                document.getElementById('btnSaveText').textContent = 'Simpan Data';
+                document.getElementById('inputTanggal').value = todayStr();
+                document.getElementById('inputStokAwal').value = 0;
+                document.getElementById('inputMasuk').value = 0;
+                document.getElementById('inputKeluar').value = 0;
+            }
+            updateTersediaPreview();
+            document.getElementById('inputModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            refreshIcons();
+        }
+        function fillForm(it) {
+            document.getElementById('modalTitle').textContent = 'Edit Data Mesin';
+            document.getElementById('btnSaveText').textContent = 'Simpan Perubahan';
+            document.getElementById('inputId').value = it.id;
+            document.getElementById('inputTanggal').value = it.tanggal || todayStr();
+            document.getElementById('inputKode').value = it.kode || '';
+            document.getElementById('inputNama').value = it.nama || '';
+            document.getElementById('inputKategori').value = it.kategori || 'Mesin Produksi';
+            document.getElementById('inputStokAwal').value = toInt(it.stokAwal);
+            document.getElementById('inputMasuk').value = toInt(it.input);
+            document.getElementById('inputKeluar').value = toInt(it.output);
+            document.getElementById('inputCatatan').value = it.catatan || '';
+            setPhoto(it.foto || '');
+            updateTersediaPreview();
+        }
+        async function closeInputModal() {
+            await stopBarcodeScanner();
+            document.getElementById('inputModal').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        function updateTersediaPreview() {
+            const v = toInt(document.getElementById('inputStokAwal').value) +
+                toInt(document.getElementById('inputMasuk').value) -
+                toInt(document.getElementById('inputKeluar').value);
+            const el = document.getElementById('previewTersedia');
+            el.textContent = v + ' Unit';
+            el.className = 'text-base font-extrabold ' + (v < 0 ? 'text-red-600' : 'text-emerald-700');
+        }
+        async function saveItem(e) {
+            e.preventDefault();
+            const id = document.getElementById('inputId').value;
+            const data = {
+                tanggal: document.getElementById('inputTanggal').value,
+                kode: document.getElementById('inputKode').value.trim(),
+                nama: document.getElementById('inputNama').value.trim(),
+                kategori: document.getElementById('inputKategori').value,
+                stokAwal: toInt(document.getElementById('inputStokAwal').value),
+                input: toInt(document.getElementById('inputMasuk').value),
+                output: toInt(document.getElementById('inputKeluar').value),
+                catatan: document.getElementById('inputCatatan').value.trim(),
+                foto: currentPhoto
+            };
+            if (!data.tanggal || !data.kode || !data.nama) {
+                showToast('Lengkapi Tanggal, Kode/SN, dan Nama Barang', 'error');
+                return;
+            }
+            if (data.stokAwal + data.input - data.output < 0) {
+                showToast('Output melebihi stok yang tersedia', 'error');
+                return;
+            }
+            const duplicate = items.find(x => x.kode.toLowerCase() === data.kode.toLowerCase() && x.id !== id);
+            if (duplicate) {
+                showToast(`Kode "${data.kode}" sudah dipakai oleh ${duplicate.nama}`, 'error');
+                return;
+            }
+            const backup = JSON.parse(JSON.stringify(items));
+            if (id) {
+                const idx = items.findIndex(x => x.id === id);
+                if (idx >= 0) items[idx] = { ...items[idx], ...data };
+            } else {
+                items.push({ id: uid(), ...data });
+            }
+            if (!saveData()) { items = backup; return; }
+
+            // Pindahkan filter ke periode data yang disimpan agar langsung terlihat
+            const [y, m] = data.tanggal.split('-');
+            populateTahun();
+            document.getElementById('filterTahun').value = y;
+            if (document.getElementById('filterBulan').value !== 'ALL') document.getElementById('filterBulan').value = m;
+
+            await closeInputModal();
+            renderDashboard();
+            showToast(id ? 'Perubahan disimpan' : 'Data mesin berhasil ditambahkan', 'success');
+        }
+
+        // ---------- Foto Barang (Kamera HP) ----------
+        function triggerPhotoCapture() {
+            document.getElementById('cameraPhotoInput').click();
+        }
+        function setPhoto(dataUrl) {
+            currentPhoto = dataUrl || '';
+            document.getElementById('photoPreviewImg').src = currentPhoto || PLACEHOLDER_IMG;
+            document.getElementById('photoStatusText').textContent = currentPhoto ? 'Foto siap disimpan' : 'Belum ada foto diambil';
+            document.getElementById('btnRemovePhoto').classList.toggle('hidden', !currentPhoto);
+        }
+        function removePhoto() {
+            setPhoto('');
+        }
+        function handlePhotoSelected(event) {
+            const file = event.target.files && event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { showToast('File harus berupa gambar', 'error'); return; }
+            document.getElementById('photoStatusText').textContent = 'Memproses foto...';
+            const reader = new FileReader();
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    const MAX = 480;
+                    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    setPhoto(canvas.toDataURL('image/jpeg', 0.7));
+                    showToast('Foto berhasil diambil', 'success');
+                };
+                img.onerror = () => { setPhoto(currentPhoto); showToast('Gagal membaca foto', 'error'); };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ---------- Scanner Barcode / QR ----------
+        async function toggleBarcodeScanner() {
+            if (scannerRunning) {
+                await stopBarcodeScanner();
+            } else {
+                await startBarcodeScanner();
+            }
+        }
+        async function startBarcodeScanner() {
+            if (typeof Html5Qrcode === 'undefined') {
+                showToast('Library scanner gagal dimuat. Periksa koneksi internet.', 'error');
+                return;
+            }
+            if (!window.isSecureContext) {
+                showToast('Kamera hanya bisa dipakai lewat HTTPS', 'error');
+                return;
+            }
+            const container = document.getElementById('scannerContainer');
+            container.classList.remove('hidden');
+            setScannerButton(true);
+            try {
+                if (!html5QrCode) html5QrCode = new Html5Qrcode('qr-reader');
+                await html5QrCode.start(
+                    { facingMode: 'environment' },
+                    {
+                        fps: 10,
+                        qrbox: (w, h) => {
+                            const size = Math.floor(Math.min(w, h) * 0.8);
+                            return { width: size, height: Math.floor(size * 0.6) };
+                        }
+                    },
+                    onScanSuccess,
+                    () => {}
+                );
+                scannerRunning = true;
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } catch (err) {
+                scannerRunning = false;
+                container.classList.add('hidden');
+                setScannerButton(false);
+                const msg = String(err && (err.name || err.message || err));
+                if (/NotAllowed|Permission/i.test(msg)) {
+                    showToast('Izin kamera ditolak. Aktifkan izin kamera di pengaturan browser.', 'error');
+                } else if (/NotFound|Overconstrained|no camera/i.test(msg)) {
+                    showToast('Kamera tidak ditemukan di perangkat ini', 'error');
+                } else {
+                    showToast('Gagal membuka kamera: ' + msg, 'error');
+                }
+            }
+        }
+        async function stopBarcodeScanner() {
+            if (html5QrCode && scannerRunning) {
+                try { await html5QrCode.stop(); html5QrCode.clear(); } catch (e) { /* abaikan */ }
+            }
+            scannerRunning = false;
+            document.getElementById('scannerContainer').classList.add('hidden');
+            setScannerButton(false);
+        }
+        function setScannerButton(active) {
+            document.getElementById('textToggleScanner').textContent = active ? 'Stop Scan' : 'Scan Barcode/QR';
+            const btn = document.getElementById('btnToggleScanner');
+            btn.classList.toggle('bg-red-600', active);
+            btn.classList.toggle('hover:bg-red-500', active);
+            btn.classList.toggle('bg-indigo-600', !active);
+            btn.classList.toggle('hover:bg-indigo-500', !active);
+        }
+        let scanHandling = false;
+        async function onScanSuccess(decodedText) {
+            const code = String(decodedText).trim();
+            if (!code || scanHandling) return;
+            scanHandling = true;
+            try {
+                await stopBarcodeScanner();
+                if (navigator.vibrate) navigator.vibrate(120);
+
+                const editingId = document.getElementById('inputId').value;
+                const existing = items.find(x => x.kode.toLowerCase() === code.toLowerCase());
+                if (existing && existing.id !== editingId) {
+                    // Barang sudah terdaftar: langsung ke input jumlah masuk/keluar
+                    await closeInputModal();
+                    openQuickModal(existing.id);
+                    showToast(`Barang ditemukan: ${existing.nama}`, 'success');
+                } else {
+                    document.getElementById('inputKode').value = code;
+                    if (!editingId) {
+                        // Barang baru: kode terisi, langsung isi nama & jumlah masuk
+                        const masuk = document.getElementById('inputMasuk');
+                        if (toInt(masuk.value) === 0) masuk.value = 1;
+                        updateTersediaPreview();
+                        showToast('Kode baru terbaca. Isi nama barang & jumlah masuk.', 'success');
+                        const nama = document.getElementById('inputNama');
+                        if (!nama.value) nama.focus();
+                    } else {
+                        showToast('Kode terbaca: ' + code, 'success');
+                    }
+                }
+            } finally {
+                scanHandling = false;
+            }
+        }
+
+        // ---------- Scan Cepat & Transaksi Hasil Scan ----------
+        let quickItemId = null;
+        async function startQuickScan() {
+            openInputModal();
+            await startBarcodeScanner();
+        }
+        function openQuickModal(id) {
+            const it = items.find(x => x.id === id);
+            if (!it) return;
+            quickItemId = id;
+            document.getElementById('quickFoto').src = it.foto || PLACEHOLDER_IMG;
+            document.getElementById('quickNama').textContent = it.nama;
+            document.getElementById('quickKategori').textContent = it.kategori;
+            document.getElementById('quickKode').textContent = it.kode;
+            document.getElementById('quickStok').textContent = tersedia(it) + ' Unit';
+            const qty = document.getElementById('quickQty');
+            qty.value = 1;
+            document.getElementById('quickModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            refreshIcons();
+            setTimeout(() => { qty.focus(); qty.select(); }, 50);
+        }
+        function closeQuickModal() {
+            quickItemId = null;
+            document.getElementById('quickModal').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        function stepQuickQty(delta) {
+            const qty = document.getElementById('quickQty');
+            qty.value = Math.max(1, toInt(qty.value) + delta);
+        }
+        function saveQuickTransaction(type) {
+            const it = items.find(x => x.id === quickItemId);
+            if (!it) { closeQuickModal(); return; }
+            const qty = toInt(document.getElementById('quickQty').value);
+            if (qty < 1) { showToast('Jumlah minimal 1 unit', 'error'); return; }
+            if (type === 'out' && qty > tersedia(it)) {
+                showToast(`Stok tidak cukup. Tersedia ${tersedia(it)} unit.`, 'error');
+                return;
+            }
+            const backup = { input: it.input, output: it.output, tanggal: it.tanggal };
+            if (type === 'in') it.input = toInt(it.input) + qty;
+            else it.output = toInt(it.output) + qty;
+            it.tanggal = todayStr();
+            if (!saveData()) { Object.assign(it, backup); return; }
+
+            const [y, m] = it.tanggal.split('-');
+            populateTahun();
+            document.getElementById('filterTahun').value = y;
+            if (document.getElementById('filterBulan').value !== 'ALL') document.getElementById('filterBulan').value = m;
+            closeQuickModal();
+            renderDashboard();
+            showToast(`${type === 'in' ? '+' : '-'}${qty} unit ${type === 'in' ? 'masuk' : 'keluar'}: ${it.nama}`, 'success');
+        }
+        function editFromQuick() {
+            const id = quickItemId;
+            closeQuickModal();
+            openInputModal(id);
+        }
+        function scanAgainFromQuick() {
+            closeQuickModal();
+            startQuickScan();
+        }
+
+        // ---------- Ekspor Excel ----------
+        function exportToExcel() {
+            if (typeof XLSX === 'undefined') { showToast('Library Excel gagal dimuat', 'error'); return; }
+            const list = getFilteredItems();
+            if (list.length === 0) { showToast('Tidak ada data untuk diekspor', 'error'); return; }
+            const rows = list.map((it, i) => ({
+                'No': i + 1,
+                'Tanggal Update': it.tanggal,
+                'Kode / SN': it.kode,
+                'Nama Mesin': it.nama,
+                'Kategori': it.kategori,
+                'Stok Awal': toInt(it.stokAwal),
+                'Input (+)': toInt(it.input),
+                'Output (-)': toInt(it.output),
+                'Unit Tersedia': tersedia(it),
+                'Catatan': it.catatan || ''
+            }));
+            rows.push({
+                'No': '', 'Tanggal Update': '', 'Kode / SN': '', 'Nama Mesin': 'TOTAL', 'Kategori': '',
+                'Stok Awal': list.reduce((s, it) => s + toInt(it.stokAwal), 0),
+                'Input (+)': list.reduce((s, it) => s + toInt(it.input), 0),
+                'Output (-)': list.reduce((s, it) => s + toInt(it.output), 0),
+                'Unit Tersedia': list.reduce((s, it) => s + tersedia(it), 0),
+                'Catatan': ''
+            });
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 18 }, { wch: 32 }, { wch: 24 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 13 }, { wch: 28 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
+            const bulan = document.getElementById('filterBulan').value;
+            const tahun = document.getElementById('filterTahun').value;
+            XLSX.writeFile(wb, `Laporan_Store_Mesin_${bulan === 'ALL' ? 'Semua' : bulan}_${tahun}.xlsx`);
+            showToast('Laporan Excel berhasil diunduh', 'success');
+        }
+
+        // ---------- Inisialisasi ----------
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            if (!document.getElementById('quickModal').classList.contains('hidden')) closeQuickModal();
+            else if (!document.getElementById('inputModal').classList.contains('hidden')) closeInputModal();
+        });
+        document.getElementById('quickModal').addEventListener('click', e => {
+            if (e.target.id === 'quickModal') closeQuickModal();
+        });
+        document.getElementById('inputModal').addEventListener('click', e => {
+            if (e.target.id === 'inputModal') closeInputModal();
+        });
+
+        loadData();
+        setPeriodeToToday();
+        renderDashboard();
+    </script>
+</body>
+</html>
